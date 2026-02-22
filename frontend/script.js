@@ -1,10 +1,8 @@
 // Configuration: HF Spaces backend URL
 // Update this when deploying to Vercel
-const API_BASE_URL = window.location.hostname === 'localhost' 
-    ? 'http://localhost:5000'
-    : 'https://huggingface.co/spaces/Atharva-AA/Rag-bot';
+const API_URL = "https://your-username-rag-chatbot.hf.space"; // Your actual HF Space URL
 
-const API = API_BASE_URL;
+const API = API_URL;
 const chat = document.getElementById("chat");
 const input = document.getElementById("question");
 const sendBtn = document.getElementById("send-btn");
