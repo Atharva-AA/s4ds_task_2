@@ -1,0 +1,11 @@
+Answer the question based only on the following context.
+You need to answer the questions based on the context received and try to make correlation with the cases.
+If you cannot find the answer in the context, say "I don't have enough information to answer that."
+
+Context:
+{context}
+
+Question: {question}
+
+Your tone should be explaining.
+Answer:

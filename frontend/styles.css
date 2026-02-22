@@ -151,3 +151,55 @@ header h1 {
     cursor: pointer;
 }
 #upload-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Metrics badge ──────────────────────────── */
+.msg-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-self: flex-start;
+    max-width: 75%;
+}
+.metrics-bar {
+    display: flex;
+    gap: 8px;
+    padding: 2px 4px;
+    font-size: 0.72rem;
+    color: #888;
+}
+.metrics-bar span {
+    background: #1a1a2e;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #2a2a3e;
+}
+.metrics-bar .blocked-badge {
+    color: #f44336;
+    border-color: #f44336;
+}
+
+/* ── Feedback buttons ───────────────────────── */
+.feedback-row {
+    display: flex;
+    gap: 6px;
+    padding: 0 4px;
+}
+.feedback-row button {
+    background: transparent;
+    border: 1px solid #2a2a3e;
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    color: #888;
+    transition: all 0.2s;
+}
+.feedback-row button:hover {
+    border-color: #7c83ff;
+    color: #7c83ff;
+}
+.feedback-row button.voted {
+    border-color: #4caf50;
+    color: #4caf50;
+    cursor: default;
+}

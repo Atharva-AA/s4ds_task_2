@@ -1,0 +1,110 @@
+# ──────────────────────────────────────────────────────────────────────
+# Daily Reindex — rebuild embeddings, evaluate, deploy if safe
+# ──────────────────────────────────────────────────────────────────────
+name: Daily Reindex
+
+on:
+  schedule:
+    - cron: "0 3 * * *"       # 03:00 UTC daily
+  workflow_dispatch:           # manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  reindex-evaluate-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python setup ────────────────────────────────────────────
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # ── 3. Install dependencies ────────────────────────────────────
+      - name: Install backend requirements
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      # ── 4. Reindex — rebuild vector store from PDFs ────────────────
+      - name: Reindex embeddings
+        working-directory: backend
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python -c "
+          import json, sys
+          from main import load_pdfs, build_vector_store, DATA_DIR
+
+          docs = load_pdfs(DATA_DIR)
+          if not docs:
+              print('No PDFs found — nothing to reindex')
+              sys.exit(0)
+
+          print(f'Loaded {len(docs)} pages. Rebuilding vector store ...')
+          vs = build_vector_store(docs)
+          print('Reindex complete.')
+          "
+
+      # ── 5. Run evaluation on freshly indexed data ──────────────────
+      - name: Run RAG evaluation
+        working-directory: backend
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python -c "
+          import json, sys
+
+          from main import load_pdfs, build_vector_store, build_chain, DATA_DIR
+          from llmops.evaluator import Evaluator
+
+          docs = load_pdfs(DATA_DIR)
+          if not docs:
+              json.dump({'score': 1.0, 'total': 0}, open('evaluation_results.json', 'w'))
+              sys.exit(0)
+
+          vs = build_vector_store(docs)
+          chain = build_chain(vs)
+
+          evaluator = Evaluator()
+          report = evaluator.run(chain.invoke)
+          print(json.dumps(report, indent=2))
+
+          with open('evaluation_results.json', 'w') as f:
+              json.dump(report, f, indent=2)
+          "
+
+      # ── 6. Gate — only deploy if evaluation score >= 0.70 ──────────
+      - name: Check evaluation threshold
+        id: threshold
+        run: |
+          python scripts/check_threshold.py backend/evaluation_results.json
+          echo "safe=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      # ── 7. Trigger backend deploy if safe ──────────────────────────
+      - name: Trigger backend deploy
+        if: steps.threshold.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'backend_deploy.yml',
+              ref: 'main',
+            });
+            console.log('Backend deploy triggered after successful reindex.');
+
+      - name: Warn if evaluation failed
+        if: steps.threshold.outcome == 'failure'
+        run: |
+          echo "::warning::Evaluation score below threshold — skipping deploy to protect production."
+          echo "Review backend/evaluation_results.json for details."

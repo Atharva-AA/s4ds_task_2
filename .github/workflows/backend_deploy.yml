@@ -1,0 +1,112 @@
+# ──────────────────────────────────────────────────────────────────────
+# Backend Deploy — push /backend contents to HuggingFace Space
+#
+# HF Spaces expects the repo root to be the app root, so we copy ONLY
+# the contents of /backend (not the full monorepo) into the Space repo.
+# ──────────────────────────────────────────────────────────────────────
+name: Deploy Backend to HuggingFace
+
+on:
+  # Trigger after Backend CI succeeds
+  workflow_run:
+    workflows: ["Backend CI"]
+    types: [completed]
+    branches: [main]
+
+  workflow_dispatch:           # manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only deploy if CI passed (or manual dispatch)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      # ── 1. Checkout the monorepo ──────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Prepare build directory (backend contents only) ────────
+      - name: Prepare HF build directory
+        run: |
+          mkdir -p hf_build
+          # Copy only backend contents — NOT the backend/ folder itself
+          cp -r backend/* hf_build/
+          cp -r backend/.env hf_build/ 2>/dev/null || true
+          # Remove any local artifacts that shouldn't ship
+          rm -rf hf_build/venv hf_build/__pycache__ hf_build/.env
+          rm -rf hf_build/chroma_store hf_build/logs
+          echo "Contents of hf_build:"
+          ls -la hf_build/
+
+      # ── 3. Copy root Dockerfile into build (HF needs it at root) ──
+      - name: Copy Dockerfile for HF Spaces
+        run: |
+          # HF Space Dockerfile expects backend/ at root, rewrite for flat structure
+          cat > hf_build/Dockerfile << 'EOF'
+          FROM python:3.10-slim
+
+          WORKDIR /app
+
+          RUN apt-get update && \
+              apt-get install -y --no-install-recommends build-essential && \
+              rm -rf /var/lib/apt/lists/*
+
+          COPY requirements.txt .
+          RUN pip install --no-cache-dir -r requirements.txt
+
+          COPY . .
+
+          RUN mkdir -p /app/data /app/logs
+
+          EXPOSE 7860
+
+          CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+          EOF
+
+      # ── 4. Clone the HF Space repo ────────────────────────────────
+      - name: Clone HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_REPO: ${{ secrets.HF_SPACE_REPO }}
+        run: |
+          git clone https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO} hf_space
+          echo "Cloned HF Space: ${HF_SPACE_REPO}"
+
+      # ── 5. Replace Space contents with fresh build ─────────────────
+      - name: Sync build to Space repo
+        run: |
+          cd hf_space
+          # Delete everything except .git
+          find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
+          # Copy fresh build
+          cp -r ../hf_build/* .
+          cp -r ../hf_build/.* . 2>/dev/null || true
+          echo "Space contents after sync:"
+          ls -la
+
+      # ── 6. Commit and push to HF Space ────────────────────────────
+      - name: Push to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_REPO: ${{ secrets.HF_SPACE_REPO }}
+        run: |
+          cd hf_space
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -A
+          # Only push if there are changes
+          if git diff --cached --quiet; then
+            echo "No changes to deploy."
+          else
+            git commit -m "deploy: $(date -u +'%Y-%m-%d %H:%M:%S UTC') from ${GITHUB_SHA::7}"
+            git push https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO} main
+            echo "Deployed successfully!"
+          fi

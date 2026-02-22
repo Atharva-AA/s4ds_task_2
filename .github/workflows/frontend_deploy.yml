@@ -1,0 +1,99 @@
+# ──────────────────────────────────────────────────────────────────────
+# Frontend Deploy — deploy to Vercel when frontend changes or backend
+# API schema changes (detected via schema hash comparison)
+# ──────────────────────────────────────────────────────────────────────
+name: Deploy Frontend to Vercel
+
+on:
+  push:
+    paths:
+      - "frontend/**"
+    branches: [main]
+
+  # Also trigger after Backend CI to check for API schema changes
+  workflow_run:
+    workflows: ["Backend CI"]
+    types: [completed]
+    branches: [main]
+
+  workflow_dispatch:           # manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Skip if triggered by failed CI
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Check if API schema changed (only for workflow_run) ─────
+      - name: Check API schema change
+        id: schema_check
+        if: github.event_name == 'workflow_run'
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          pip install --quiet fastapi langchain langchain_community langchain_groq \
+            langchain_text_splitters sentence-transformers chromadb python-dotenv
+
+          cd backend
+          python ../scripts/api_schema_hash.py
+          NEW_HASH=$(cat api_schema_hash.txt)
+          cd ..
+
+          # Try to download previous hash from cache
+          PREV_HASH=""
+          if [ -f .api_schema_hash_cache ]; then
+            PREV_HASH=$(cat .api_schema_hash_cache)
+          fi
+
+          if [ "$NEW_HASH" = "$PREV_HASH" ]; then
+            echo "API schema unchanged — skipping frontend deploy"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "API schema changed ($PREV_HASH -> $NEW_HASH) — deploying frontend"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "$NEW_HASH" > .api_schema_hash_cache
+          fi
+
+      # ── 3. Skip deploy if schema unchanged (workflow_run only) ─────
+      - name: Decide whether to deploy
+        id: should_deploy
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "deploy=${{ steps.schema_check.outputs.changed || 'false' }}" >> $GITHUB_OUTPUT
+          else
+            # Direct push to frontend/ or manual — always deploy
+            echo "deploy=true" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 4. Install Vercel CLI ──────────────────────────────────────
+      - name: Setup Node.js
+        if: steps.should_deploy.outputs.deploy == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        if: steps.should_deploy.outputs.deploy == 'true'
+        run: npm install -g vercel
+
+      # ── 5. Deploy to Vercel ────────────────────────────────────────
+      - name: Deploy frontend to Vercel
+        if: steps.should_deploy.outputs.deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          cd frontend
+          vercel deploy --prod --yes --token=$VERCEL_TOKEN
+          echo "Frontend deployed to Vercel!"

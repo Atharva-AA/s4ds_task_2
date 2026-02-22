@@ -1,8 +1,4 @@
-// Configuration: HF Spaces backend URL
-// Update this when deploying to Vercel
-const API_URL = "https://atharva-aa-rag-bot.hf.space"; // Your actual HF Space URL
-
-const API = API_URL;
+const API = "https://Atharva-AA-Rag-bot.hf.space"; // Update this with your actual HF Space API URL after deploying on HF
 const chat = document.getElementById("chat");
 const input = document.getElementById("question");
 const sendBtn = document.getElementById("send-btn");
@@ -19,6 +15,42 @@ function addMsg(text, cls) {
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
     return div;
+}
+
+function addBotMsg(answer, queryId) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "msg-wrapper";
+
+    const msg = document.createElement("div");
+    msg.className = "msg bot";
+    msg.textContent = answer;
+    wrapper.appendChild(msg);
+
+    const fb = document.createElement("div");
+    fb.className = "feedback-row";
+    fb.innerHTML = `
+        <button data-rating="up" data-qid="${queryId}">👍</button>
+        <button data-rating="down" data-qid="${queryId}">👎</button>
+    `;
+    fb.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => sendFeedback(btn));
+    });
+    wrapper.appendChild(fb);
+
+    chat.appendChild(wrapper);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendFeedback(btn) {
+    btn.parentElement.querySelectorAll("button").forEach((b) => b.disabled = true);
+    btn.classList.add("voted");
+    try {
+        await fetch(API + "/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query_id: btn.dataset.qid, rating: btn.dataset.rating }),
+        });
+    } catch { /* silent */ }
 }
 
 function showTyping() {
@@ -74,7 +106,7 @@ async function send() {
             addMsg("Error: " + (err.detail || res.statusText), "system");
         } else {
             const data = await res.json();
-            addMsg(data.answer, "bot");
+            addBotMsg(data.answer, data.query_id);
         }
     } catch (e) {
         hideTyping();
@@ -118,7 +150,7 @@ uploadBtn.addEventListener("click", async () => {
 
 // ── Events ───────────────────────────────────────
 sendBtn.addEventListener("click", send);
-input.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send(); } });
 
 checkHealth();
 setInterval(checkHealth, 60000);

@@ -1,0 +1,22 @@
+[
+  {
+    "question": "What is the definition of theft under Indian criminal law?",
+    "must_include": ["theft", "property", "dishonest"]
+  },
+  {
+    "question": "What are the punishments for murder?",
+    "must_include": ["murder", "punishment", "death"]
+  },
+  {
+    "question": "What constitutes criminal conspiracy?",
+    "must_include": ["conspiracy", "agreement", "offence"]
+  },
+  {
+    "question": "What is the right of private defence?",
+    "must_include": ["defence", "body", "property"]
+  },
+  {
+    "question": "What is the definition of fraud?",
+    "must_include": ["fraud", "deceive", "induce"]
+  }
+]
