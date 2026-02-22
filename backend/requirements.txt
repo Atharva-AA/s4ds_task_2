@@ -1,0 +1,11 @@
+langchain
+langchain_community
+langchain_groq
+langchain_text_splitters
+pypdf
+sentence-transformers
+chromadb
+python-dotenv
+fastapi
+uvicorn[standard]
+python-multipart
