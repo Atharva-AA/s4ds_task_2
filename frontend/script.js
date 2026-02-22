@@ -1,6 +1,6 @@
 // Configuration: HF Spaces backend URL
 // Update this when deploying to Vercel
-const API_URL = "https://huggingface.co/spaces/Atharva-AA/Rag-bot"; // Your actual HF Space URL
+const API_URL = "https://atharva-aa-rag-bot.hf.space"; // Your actual HF Space URL
 
 const API = API_URL;
 const chat = document.getElementById("chat");
