@@ -7,10 +7,10 @@
 name: Deploy Backend to HuggingFace
 
 on:
-  # Trigger after Backend CI succeeds
-  workflow_run:
-    workflows: ["Backend CI"]
-    types: [completed]
+  # Trigger on backend changes to main branch
+  push:
+    paths:
+      - "backend/**"
     branches: [main]
 
   workflow_dispatch:           # manual trigger
