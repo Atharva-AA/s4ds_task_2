@@ -2,7 +2,7 @@
 // Update this when deploying to Vercel
 const API_BASE_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:5000'
-    : 'https://YOUR-HF-SPACE-NAME.hf.space';
+    : 'https://huggingface.co/spaces/Atharva-AA/Rag-bot';
 
 const API = API_BASE_URL;
 const chat = document.getElementById("chat");
