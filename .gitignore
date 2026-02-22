@@ -30,6 +30,8 @@ wheels/
 chroma_store/
 
 # Data
+backend/data/*.pdf
+data
 data/*.pdf
 data/*.docx
 data/*.doc
