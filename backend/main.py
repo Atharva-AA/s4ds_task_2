@@ -351,10 +351,23 @@ async def health():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
+    global rag_chain, vector_store
     if rag_chain is None:
-        raise HTTPException(
-            status_code=503, detail="RAG chain not initialised. Upload PDFs first."
-        )
+        # Try to recover: maybe ChromaDB exists but chain wasn't built
+        try:
+            emb = get_embedding()
+            vector_store = Chroma(persist_directory=CHROMA_DIR, embedding_function=emb)
+            if vector_store._collection.count() > 0:
+                rag_chain = build_chain(vector_store)
+                logger.info("[chat] Auto-recovered rag_chain from existing ChromaDB")
+            else:
+                raise HTTPException(
+                    status_code=503, detail="RAG chain not initialised. Upload PDFs first."
+                )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503, detail="RAG chain not initialised and recovery failed. Upload PDFs first."
+            )
 
     t0 = time.time()
     qid = uuid.uuid4().hex[:12]
@@ -483,6 +496,9 @@ async def upload(files: list[UploadFile] = File(...)):
     with _store_lock:
         if vector_store is not None:
             rag_chain = build_chain(vector_store)
+            logger.info(f"[upload] Chain rebuilt after embedding {len(saved)} files")
+        else:
+            logger.error("[upload] vector_store is None after embedding — this should not happen")
 
     logger.info(f"Uploaded {len(saved)} file(s), {total_chunks} chunks added.")
     return {
