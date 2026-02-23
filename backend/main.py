@@ -495,8 +495,40 @@ async def upload(files: list[UploadFile] = File(...)):
 
 @app.get("/documents")
 async def list_documents():
+    """List PDF files currently present in DATA_DIR (before deletion)."""
     pdfs = glob.glob(os.path.join(DATA_DIR, "*.pdf"))
     return {"documents": [os.path.basename(p) for p in pdfs]}
+
+
+@app.get("/documents-stats")
+async def documents_stats():
+    """Return ChromaDB collection stats (actual ingested documents/chunks)."""
+    global vector_store
+    if vector_store is None:
+        try:
+            emb = get_embedding()
+            vector_store = Chroma(
+                persist_directory=CHROMA_DIR, embedding_function=emb
+            )
+        except Exception as exc:
+            return {"error": f"Failed to load Chroma store: {exc}"}
+    try:
+        count = vector_store._collection.count()
+        # Sample a few documents to show sources
+        sample_meta = []
+        if count > 0:
+            sample = vector_store._collection.peek(limit=5)
+            for doc in sample.get("metadatas", []):
+                src = doc.get("source", "unknown")
+                if src not in sample_meta:
+                    sample_meta.append(src)
+        return {
+            "total_chunks": count,
+            "sample_sources": sample_meta,
+            "status": "ok",
+        }
+    except Exception as exc:
+        return {"error": f"Failed to query Chroma: {exc}"}
 
 
 class IngestUrlRequest(BaseModel):
