@@ -9,3 +9,5 @@ python-dotenv
 fastapi
 uvicorn[standard]
 python-multipart
+beautifulsoup4
+requests

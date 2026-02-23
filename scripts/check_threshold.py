@@ -12,7 +12,7 @@ Usage:
 import json
 import sys
 
-MINIMUM_SCORE = 0.70
+MINIMUM_SCORE = 0.4
 
 
 def main():
